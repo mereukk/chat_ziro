@@ -8,11 +8,17 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const { Resend } = require('resend');
+const { createClient } = require('@supabase/supabase-js');
 const db = require('./database');
 const telegram = require('./telegram');
 
 // Resend는 선택 사항 (비밀번호 찾기용)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Supabase Storage 클라이언트
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
 const server = http.createServer(app);
@@ -23,20 +29,10 @@ const PORT = process.env.PORT || 3000;
 // 미들웨어
 app.use(express.json());
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
 
-// 프로필 이미지 업로드 설정
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
+// 프로필 이미지 업로드 설정 (메모리 스토리지 - Supabase로 전송)
 const upload = multer({ 
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -48,10 +44,26 @@ const upload = multer({
   }
 });
 
-// uploads 폴더 생성
-const fs = require('fs');
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
+// Supabase Storage에 이미지 업로드
+async function uploadToSupabase(file) {
+  const ext = path.extname(file.originalname);
+  const filename = `${uuidv4()}${ext}`;
+  
+  const { data, error } = await supabase.storage
+    .from('avatars')
+    .upload(filename, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    });
+  
+  if (error) throw error;
+  
+  // Public URL 가져오기
+  const { data: urlData } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(filename);
+  
+  return urlData.publicUrl;
 }
 
 // ===== 계정 API =====
@@ -209,7 +221,8 @@ app.post('/api/accounts/:id/profile-image', upload.single('image'), async (req, 
     if (!req.file) {
       return res.status(400).json({ error: '이미지가 없습니다.' });
     }
-    const profileImage = `/uploads/${req.file.filename}`;
+    // Supabase Storage에 업로드
+    const profileImage = await uploadToSupabase(req.file);
     const account = await db.updateAccount(req.params.id, { profileImage });
     res.json(account);
   } catch (error) {
@@ -288,7 +301,8 @@ app.post('/api/users/:id/profile-image', upload.single('image'), async (req, res
     if (!req.file) {
       return res.status(400).json({ error: '이미지가 없습니다.' });
     }
-    const profileImage = `/uploads/${req.file.filename}`;
+    // Supabase Storage에 업로드
+    const profileImage = await uploadToSupabase(req.file);
     const user = await db.updateUser(req.params.id, { profileImage });
     res.json(user);
   } catch (error) {
