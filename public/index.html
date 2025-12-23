@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Ziro</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- 시작 화면 (세션 생성/참가) -->
+    <div id="welcome-screen" class="screen active">
+      <div class="welcome-container">
+        <div class="logo">
+          <span class="logo-icon">💬</span>
+          <h1>Chat Ziro</h1>
+        </div>
+        <p class="tagline">간편하게 채팅하고, 알림 받으세요</p>
+        
+        <div class="welcome-actions">
+          <button id="btn-create-session" class="btn btn-primary">
+            <span class="btn-icon">✨</span>
+            새 채팅 시작하기
+          </button>
+          
+          <div class="divider">
+            <span>또는</span>
+          </div>
+          
+          <div class="join-section">
+            <p>링크를 받으셨나요? URL에서 자동으로 참가됩니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 프로필 설정 화면 -->
+    <div id="profile-screen" class="screen">
+      <div class="profile-container">
+        <h2>프로필 설정</h2>
+        <p class="subtitle">채팅에서 사용할 프로필을 설정하세요</p>
+        
+        <div class="profile-form">
+          <div class="profile-image-section">
+            <div class="profile-image-wrapper" id="profile-image-wrapper">
+              <img id="profile-preview" src="" alt="프로필">
+              <div class="profile-image-overlay">
+                <span>📷</span>
+              </div>
+            </div>
+            <input type="file" id="profile-image-input" accept="image/*" hidden>
+            <p class="hint">클릭하여 이미지 변경</p>
+          </div>
+          
+          <div class="input-group">
+            <label for="nickname-input">닉네임</label>
+            <input type="text" id="nickname-input" placeholder="닉네임을 입력하세요" maxlength="20">
+          </div>
+          
+          <div class="input-group">
+            <label for="telegram-input">텔레그램 Chat ID <span class="optional">(선택)</span></label>
+            <input type="text" id="telegram-input" placeholder="알림을 받을 텔레그램 Chat ID">
+            <p class="hint">
+              <a href="#" id="telegram-help-link">텔레그램 알림 설정 방법 보기</a>
+            </p>
+          </div>
+          
+          <button id="btn-save-profile" class="btn btn-primary btn-full">
+            채팅 시작하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 메인 채팅 화면 -->
+    <div id="chat-screen" class="screen">
+      <div class="chat-layout">
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="my-profile" id="my-profile">
+              <img id="sidebar-profile-image" src="" alt="내 프로필">
+              <div class="profile-info">
+                <span id="sidebar-nickname">닉네임</span>
+                <span class="online-status">온라인</span>
+              </div>
+              <button id="btn-edit-profile" class="btn-icon-only" title="프로필 수정">⚙️</button>
+            </div>
+          </div>
+          
+          <div class="rooms-section">
+            <div class="rooms-header">
+              <h3>채팅방</h3>
+              <button id="btn-add-room" class="btn-icon-only" title="새 채팅방">➕</button>
+            </div>
+            <ul id="rooms-list" class="rooms-list">
+              <!-- 채팅방 목록 -->
+            </ul>
+            
+            <!-- 보관된 채팅방 섹션 -->
+            <div id="archived-section" class="archived-section hidden">
+              <div class="archived-header" id="archived-header">
+                <span>📁 보관됨</span>
+                <span class="archived-count" id="archived-count">0</span>
+                <span class="toggle-icon">▼</span>
+              </div>
+              <ul id="archived-rooms-list" class="rooms-list archived-list">
+                <!-- 보관된 채팅방 목록 -->
+              </ul>
+            </div>
+          </div>
+          
+          <div class="sidebar-footer">
+            <div class="online-users">
+              <span class="label">접속 중:</span>
+              <span id="online-count">0</span>명
+            </div>
+            <button id="btn-share-link" class="btn btn-secondary btn-small">
+              🔗 링크 공유
+            </button>
+          </div>
+        </aside>
+
+        <!-- 메인 채팅 영역 -->
+        <main class="chat-main">
+          <div class="chat-header">
+            <div class="room-info">
+              <h2 id="current-room-name">일반</h2>
+              <button id="btn-edit-room" class="btn-icon-only" title="방 이름 수정">✏️</button>
+            </div>
+            <div class="chat-actions">
+              <button id="btn-export-room" class="btn btn-secondary btn-small" title="채팅 백업">
+                💾 백업
+              </button>
+              <button id="btn-archive-room" class="btn btn-secondary btn-small" title="채팅방 보관">
+                📁 보관
+              </button>
+            </div>
+          </div>
+          
+          <div class="messages-container" id="messages-container">
+            <div id="messages-list" class="messages-list">
+              <!-- 메시지들 -->
+            </div>
+            <div id="typing-indicator" class="typing-indicator hidden">
+              <span class="typing-name"></span>님이 입력 중...
+            </div>
+          </div>
+          
+          <div class="chat-input-area">
+            <div class="input-wrapper">
+              <textarea id="message-input" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+              <button id="btn-send" class="btn btn-primary btn-send" disabled>
+                <span>전송</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- 모달: 텔레그램 도움말 -->
+    <div id="telegram-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>📱 텔레그램 알림 설정 방법</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <ol class="steps">
+            <li>
+              <strong>텔레그램 봇 찾기</strong>
+              <p>텔레그램에서 <code>@userinfobot</code>을 검색하세요.</p>
+            </li>
+            <li>
+              <strong>Chat ID 확인</strong>
+              <p>봇에게 아무 메시지나 보내면 Chat ID를 알려줍니다.</p>
+            </li>
+            <li>
+              <strong>Chat ID 입력</strong>
+              <p>받은 숫자를 위 입력란에 넣으세요.</p>
+            </li>
+          </ol>
+          <div class="note">
+            ⚠️ 알림을 받으려면 서버 관리자가 텔레그램 봇 토큰을 설정해야 합니다.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 방 이름 수정 -->
+    <div id="room-edit-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-small">
+        <div class="modal-header">
+          <h3>채팅방 이름 수정</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <input type="text" id="room-name-input" placeholder="채팅방 이름" maxlength="30">
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-close-modal>취소</button>
+            <button id="btn-save-room-name" class="btn btn-primary">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 새 채팅방 -->
+    <div id="new-room-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-small">
+        <div class="modal-header">
+          <h3>새 채팅방 만들기</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <input type="text" id="new-room-name-input" placeholder="채팅방 이름" maxlength="30">
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-close-modal>취소</button>
+            <button id="btn-create-room" class="btn btn-primary">만들기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 메시지 수정 -->
+    <div id="message-edit-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-small">
+        <div class="modal-header">
+          <h3>메시지 수정</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <textarea id="edit-message-input" rows="3" placeholder="메시지 내용"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button id="btn-delete-message" class="btn btn-danger">삭제</button>
+            <div class="modal-actions-right">
+              <button class="btn btn-secondary" data-close-modal>취소</button>
+              <button id="btn-save-message" class="btn btn-primary">저장</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 프로필 수정 -->
+    <div id="profile-edit-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>프로필 수정</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="profile-form">
+            <div class="profile-image-section">
+              <div class="profile-image-wrapper" id="edit-profile-image-wrapper">
+                <img id="edit-profile-preview" src="" alt="프로필">
+                <div class="profile-image-overlay">
+                  <span>📷</span>
+                </div>
+              </div>
+              <input type="file" id="edit-profile-image-input" accept="image/*" hidden>
+            </div>
+            
+            <div class="input-group">
+              <label for="edit-nickname-input">닉네임</label>
+              <input type="text" id="edit-nickname-input" placeholder="닉네임" maxlength="20">
+            </div>
+            
+            <div class="input-group">
+              <label for="edit-telegram-input">텔레그램 Chat ID</label>
+              <input type="text" id="edit-telegram-input" placeholder="Chat ID">
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-close-modal>취소</button>
+            <button id="btn-update-profile" class="btn btn-primary">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toast-container"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
+
+
