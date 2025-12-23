@@ -83,8 +83,11 @@ const elements = {
   onlineCount: document.getElementById('online-count'),
   btnShareLink: document.getElementById('btn-share-link'),
   btnLogoutChat: document.getElementById('btn-logout-chat'),
+  sidebar: document.querySelector('.sidebar'),
   
   // 채팅 메인
+  chatMain: document.querySelector('.chat-main'),
+  btnBackToSidebar: document.getElementById('btn-back-to-sidebar'),
   currentRoomName: document.getElementById('current-room-name'),
   btnEditRoom: document.getElementById('btn-edit-room'),
   btnExportRoom: document.getElementById('btn-export-room'),
@@ -123,6 +126,21 @@ const elements = {
 function showScreen(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
+}
+
+// 모바일 화면 전환
+function showChatMobile() {
+  if (window.innerWidth <= 768) {
+    elements.sidebar.classList.add('hidden-mobile');
+    elements.chatMain.classList.add('active-mobile');
+  }
+}
+
+function showSidebarMobile() {
+  if (window.innerWidth <= 768) {
+    elements.sidebar.classList.remove('hidden-mobile');
+    elements.chatMain.classList.remove('active-mobile');
+  }
 }
 
 function showModal(modalId) {
@@ -481,6 +499,9 @@ async function selectRoom(roomId) {
     elements.currentRoomName.textContent = room.name;
     updateArchiveButton();
   }
+  
+  // 모바일: 채팅 영역으로 전환
+  showChatMobile();
   
   // 메시지 로드
   try {
@@ -857,6 +878,9 @@ function initEventListeners() {
       window.location.href = '/';
     }
   });
+  
+  // 모바일 뒤로가기 (사이드바로 돌아가기)
+  elements.btnBackToSidebar.addEventListener('click', showSidebarMobile);
   
   // 보관된 섹션 접기/펼치기
   elements.archivedHeader.addEventListener('click', () => {
