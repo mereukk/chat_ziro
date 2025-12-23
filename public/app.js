@@ -13,6 +13,7 @@ const state = {
 // Socket.io 연결
 let socket = null;
 let pendingRoomSelect = null;
+let pendingSessionId = null; // 로그인 후 이동할 세션 ID
 
 // ===== DOM 요소 =====
 const elements = {
@@ -237,7 +238,27 @@ async function joinSession(sessionId) {
     
     // 새 사용자
     state.currentRoomId = session.rooms[0]?.id;
-    showScreen('profile-screen');
+    
+    // 로그인한 계정이 있으면 바로 입장 (프로필 설정 건너뛰기)
+    if (state.account) {
+      const user = await api('POST', `/sessions/${state.sessionId}/users`, { 
+        nickname: state.account.nickname || state.account.username,
+        accountId: state.account.id
+      });
+      state.userId = user.id;
+      state.user = user;
+      state.user.profile_image = state.account.profile_image;
+      state.user.telegram_chat_id = state.account.telegram_chat_id;
+      
+      localStorage.setItem(`user_${state.sessionId}`, user.id);
+      
+      // URL 변경
+      history.pushState({}, '', `/chat/${state.sessionId}`);
+      
+      await initChat();
+    } else {
+      showScreen('profile-screen');
+    }
   } catch (error) {
     showToast('세션을 찾을 수 없습니다.', 'error');
     showScreen('welcome-screen');
@@ -961,9 +982,17 @@ async function handleLogin(e) {
     }
     
     saveAccount(data);
-    showScreen('welcome-screen');
     showToast('로그인되었습니다!', 'success');
     elements.loginForm.reset();
+    
+    // 대기 중인 세션이 있으면 그 세션으로 이동
+    if (pendingSessionId) {
+      const sessionId = pendingSessionId;
+      pendingSessionId = null;
+      joinSession(sessionId);
+    } else {
+      showScreen('welcome-screen');
+    }
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -991,9 +1020,17 @@ async function handleRegister(e) {
     }
     
     saveAccount(data);
-    showScreen('welcome-screen');
     showToast('회원가입 완료! 환영합니다!', 'success');
     elements.registerForm.reset();
+    
+    // 대기 중인 세션이 있으면 그 세션으로 이동
+    if (pendingSessionId) {
+      const sessionId = pendingSessionId;
+      pendingSessionId = null;
+      joinSession(sessionId);
+    } else {
+      showScreen('welcome-screen');
+    }
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -1082,7 +1119,14 @@ function init() {
   
   if (match) {
     const sessionId = match[1];
-    joinSession(sessionId);
+    // 로그인 되어있으면 바로 입장, 아니면 로그인 화면
+    if (state.account) {
+      joinSession(sessionId);
+    } else {
+      pendingSessionId = sessionId;
+      showScreen('login-screen');
+      showToast('채팅방에 입장하려면 로그인이 필요합니다.', 'info');
+    }
   } else {
     showScreen('welcome-screen');
   }
