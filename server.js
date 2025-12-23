@@ -455,11 +455,20 @@ io.on('connection', (socket) => {
         // 같은 세션의 모든 사용자에게 메시지 전송
         io.to(room.session_id).emit('message:new', message);
         
-        // 텔레그램 알림 (본인 제외)
+        // 텔레그램 알림 (본인 제외, 중복 Chat ID 제거)
         const users = await db.getUsersBySession(room.session_id);
         const chatUrl = `https://chat-mereu.onrender.com/chat/${room.session_id}`;
+        const notifiedChatIds = new Set(); // 중복 알림 방지
+        const senderChatId = sender.telegram_chat_id; // 발신자 Chat ID
+        
         for (const user of users) {
           if (user.id !== userId && user.telegram_chat_id) {
+            // 발신자 Chat ID와 같으면 건너뛰기 (본인 알림 방지)
+            if (user.telegram_chat_id === senderChatId) continue;
+            // 이미 알림 보낸 Chat ID는 건너뛰기
+            if (notifiedChatIds.has(user.telegram_chat_id)) continue;
+            notifiedChatIds.add(user.telegram_chat_id);
+            
             await telegram.notifyNewMessage(
               user.telegram_chat_id,
               sender.nickname,
