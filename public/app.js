@@ -758,12 +758,17 @@ function initEventListeners() {
   elements.btnShowRegister.addEventListener('click', () => showScreen('register-screen'));
   elements.btnBackLogin.addEventListener('click', () => showScreen('welcome-screen'));
   elements.btnBackRegister.addEventListener('click', () => showScreen('welcome-screen'));
-  elements.btnBackForgot.addEventListener('click', () => showScreen('login-screen'));
+  if (elements.btnBackForgot) {
+    elements.btnBackForgot.addEventListener('click', () => showScreen('login-screen'));
+  }
   elements.btnBackMyChats.addEventListener('click', () => showScreen('welcome-screen'));
-  elements.btnForgotPassword.addEventListener('click', (e) => {
-    e.preventDefault();
-    showScreen('forgot-screen');
-  });
+  // 비밀번호 찾기 버튼 (있으면)
+  if (elements.btnForgotPassword) {
+    elements.btnForgotPassword.addEventListener('click', (e) => {
+      e.preventDefault();
+      showScreen('forgot-screen');
+    });
+  }
   elements.btnLogout.addEventListener('click', () => {
     clearAccount();
     showToast('로그아웃되었습니다.', 'success');
@@ -773,7 +778,9 @@ function initEventListeners() {
   // 폼 제출
   elements.loginForm.addEventListener('submit', handleLogin);
   elements.registerForm.addEventListener('submit', handleRegister);
-  elements.forgotForm.addEventListener('submit', handleForgotPassword);
+  if (elements.forgotForm) {
+    elements.forgotForm.addEventListener('submit', handleForgotPassword);
+  }
   
   // 프로필 설정
   elements.profileImageWrapper.addEventListener('click', () => {
@@ -1012,7 +1019,7 @@ async function handleForgotPassword(e) {
     
     showToast('이메일이 발송되었습니다. 메일함을 확인하세요!', 'success');
     showScreen('welcome-screen');
-    elements.forgotForm.reset();
+    if (elements.forgotForm) elements.forgotForm.reset();
   } catch (error) {
     showToast(error.message, 'error');
   }
