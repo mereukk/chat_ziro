@@ -50,7 +50,7 @@ async function uploadToSupabase(file) {
   const filename = `${uuidv4()}${ext}`;
   
   const { data, error } = await supabase.storage
-    .from('avatars')
+    .from('abatars')
     .upload(filename, file.buffer, {
       contentType: file.mimetype,
       upsert: false
@@ -60,7 +60,7 @@ async function uploadToSupabase(file) {
   
   // Public URL 가져오기
   const { data: urlData } = supabase.storage
-    .from('avatars')
+    .from('abatars')
     .getPublicUrl(filename);
   
   return urlData.publicUrl;
