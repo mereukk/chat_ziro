@@ -1,359 +1,401 @@
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 const { v4: uuidv4 } = require('uuid');
 
-const DB_PATH = path.join(__dirname, 'chat.db');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 
-let db = null;
+let supabase = null;
 
 // 데이터베이스 초기화
 async function initDatabase() {
-  const SQL = await initSqlJs();
-  
-  // 기존 DB 파일이 있으면 로드
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ SUPABASE_URL과 SUPABASE_KEY 환경변수를 설정하세요!');
+    process.exit(1);
   }
   
-  // 테이블 생성
-  db.run(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      nickname TEXT DEFAULT '익명',
-      profile_image TEXT DEFAULT NULL,
-      telegram_chat_id TEXT DEFAULT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  db.run(`
-    CREATE TABLE IF NOT EXISTS rooms (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      is_archived INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  db.run(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      room_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      is_edited INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  // 계정 테이블
-  db.run(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      nickname TEXT DEFAULT '익명',
-      profile_image TEXT DEFAULT NULL,
-      telegram_chat_id TEXT DEFAULT NULL,
-      reset_token TEXT DEFAULT NULL,
-      reset_token_expires DATETIME DEFAULT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  // 계정-세션 연결 테이블 (어떤 계정이 어떤 세션에 참여했는지)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS account_sessions (
-      id TEXT PRIMARY KEY,
-      account_id TEXT NOT NULL,
-      session_id TEXT NOT NULL,
-      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(account_id, session_id)
-    )
-  `);
-  
-  saveDatabase();
-  console.log('📦 데이터베이스 초기화 완료');
-  return db;
-}
-
-// DB 파일로 저장
-function saveDatabase() {
-  if (db) {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_PATH, buffer);
-  }
-}
-
-// 헬퍼 함수: 단일 행 조회
-function getOne(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  if (stmt.step()) {
-    const row = stmt.getAsObject();
-    stmt.free();
-    return row;
-  }
-  stmt.free();
-  return null;
-}
-
-// 헬퍼 함수: 여러 행 조회
-function getAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const results = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return results;
-}
-
-// 헬퍼 함수: 실행
-function run(sql, params = []) {
-  db.run(sql, params);
-  saveDatabase();
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('📦 Supabase 연결 완료');
+  return supabase;
 }
 
 // ===== 세션 관련 =====
-function createSession() {
-  const id = uuidv4();
-  run('INSERT INTO sessions (id, created_at) VALUES (?, datetime("now"))', [id]);
+async function createSession() {
+  const { data: session, error } = await supabase
+    .from('sessions')
+    .insert({})
+    .select()
+    .single();
+  
+  if (error) throw error;
   
   // 기본 채팅방 생성
-  const roomId = uuidv4();
-  run('INSERT INTO rooms (id, session_id, name, created_at) VALUES (?, ?, ?, datetime("now"))', [roomId, id, '일반']);
+  const { data: room, error: roomError } = await supabase
+    .from('rooms')
+    .insert({ session_id: session.id, name: '일반' })
+    .select()
+    .single();
   
-  return { sessionId: id, roomId };
+  if (roomError) throw roomError;
+  
+  return { sessionId: session.id, roomId: room.id };
 }
 
-function getSession(id) {
-  return getOne('SELECT * FROM sessions WHERE id = ?', [id]);
+async function getSession(id) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
 }
 
 // ===== 사용자 관련 =====
-function createUser(sessionId, nickname = '익명') {
-  const id = uuidv4();
-  run('INSERT INTO users (id, session_id, nickname, created_at) VALUES (?, ?, ?, datetime("now"))', [id, sessionId, nickname]);
-  return { id, session_id: sessionId, nickname, profile_image: null, telegram_chat_id: null };
+async function createUser(sessionId, nickname = '익명', accountId = null) {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ 
+      session_id: sessionId, 
+      nickname,
+      account_id: accountId
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
 }
 
-function getUser(id) {
-  return getOne('SELECT * FROM users WHERE id = ?', [id]);
+async function getUser(id) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
 }
 
-function getUsersBySession(sessionId) {
-  return getAll('SELECT * FROM users WHERE session_id = ?', [sessionId]);
+async function getUsersBySession(sessionId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('session_id', sessionId);
+  
+  if (error) throw error;
+  return data || [];
 }
 
-function updateUser(id, { nickname, profileImage, telegramChatId }) {
-  const updates = [];
-  const values = [];
+async function updateUser(id, { nickname, profileImage, telegramChatId }) {
+  const updates = {};
+  if (nickname !== undefined) updates.nickname = nickname;
+  if (profileImage !== undefined) updates.profile_image = profileImage;
+  if (telegramChatId !== undefined) updates.telegram_chat_id = telegramChatId;
   
-  if (nickname !== undefined) {
-    updates.push('nickname = ?');
-    values.push(nickname);
-  }
-  if (profileImage !== undefined) {
-    updates.push('profile_image = ?');
-    values.push(profileImage);
-  }
-  if (telegramChatId !== undefined) {
-    updates.push('telegram_chat_id = ?');
-    values.push(telegramChatId);
-  }
+  if (Object.keys(updates).length === 0) return getUser(id);
   
-  if (updates.length > 0) {
-    values.push(id);
-    run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
-  }
+  const { data, error } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
   
-  return getUser(id);
+  if (error) throw error;
+  return data;
 }
 
 // ===== 채팅방 관련 =====
-function createRoom(sessionId, name) {
-  const id = uuidv4();
-  run('INSERT INTO rooms (id, session_id, name, created_at) VALUES (?, ?, ?, datetime("now"))', [id, sessionId, name]);
-  return { id, session_id: sessionId, name, is_archived: 0 };
+async function createRoom(sessionId, name) {
+  const { data, error } = await supabase
+    .from('rooms')
+    .insert({ session_id: sessionId, name })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
 }
 
-function getRoomsBySession(sessionId) {
-  return getAll('SELECT * FROM rooms WHERE session_id = ? ORDER BY created_at', [sessionId]);
+async function getRoomsBySession(sessionId) {
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at');
+  
+  if (error) throw error;
+  return data || [];
 }
 
-function getRoom(id) {
-  return getOne('SELECT * FROM rooms WHERE id = ?', [id]);
+async function getRoom(id) {
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
 }
 
-function updateRoom(id, { name, isArchived }) {
-  const updates = [];
-  const values = [];
+async function updateRoom(id, { name, isArchived }) {
+  const updates = {};
+  if (name !== undefined) updates.name = name;
+  if (isArchived !== undefined) updates.is_archived = isArchived;
   
-  if (name !== undefined) {
-    updates.push('name = ?');
-    values.push(name);
-  }
-  if (isArchived !== undefined) {
-    updates.push('is_archived = ?');
-    values.push(isArchived ? 1 : 0);
-  }
+  if (Object.keys(updates).length === 0) return getRoom(id);
   
-  if (updates.length > 0) {
-    values.push(id);
-    run(`UPDATE rooms SET ${updates.join(', ')} WHERE id = ?`, values);
-  }
+  const { data, error } = await supabase
+    .from('rooms')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
   
-  return getRoom(id);
+  if (error) throw error;
+  return data;
 }
 
 // ===== 메시지 관련 =====
-function createMessage(roomId, userId, content) {
-  const id = uuidv4();
-  run('INSERT INTO messages (id, room_id, user_id, content, created_at, updated_at) VALUES (?, ?, ?, ?, datetime("now"), datetime("now"))', [id, roomId, userId, content]);
-  return getMessage(id);
+async function createMessage(roomId, userId, content) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ room_id: roomId, user_id: userId, content })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return getMessage(data.id);
 }
 
-function getMessage(id) {
-  return getOne(`
-    SELECT m.*, u.nickname, u.profile_image 
-    FROM messages m 
-    JOIN users u ON m.user_id = u.id 
-    WHERE m.id = ?
-  `, [id]);
-}
-
-function getMessagesByRoom(roomId) {
-  return getAll(`
-    SELECT m.*, u.nickname, u.profile_image 
-    FROM messages m 
-    JOIN users u ON m.user_id = u.id 
-    WHERE m.room_id = ?
-    ORDER BY m.created_at
-  `, [roomId]);
-}
-
-function updateMessage(id, content) {
-  run(`
-    UPDATE messages 
-    SET content = ?, is_edited = 1, updated_at = datetime("now")
-    WHERE id = ?
-  `, [content, id]);
-  return getMessage(id);
-}
-
-function deleteMessage(id) {
-  const message = getMessage(id);
-  if (message) {
-    run('DELETE FROM messages WHERE id = ?', [id]);
+async function getMessage(id) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      users (nickname, profile_image)
+    `)
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  
+  if (data) {
+    return {
+      ...data,
+      nickname: data.users?.nickname,
+      profile_image: data.users?.profile_image
+    };
   }
+  return data;
+}
+
+async function getMessagesByRoom(roomId) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      users (nickname, profile_image)
+    `)
+    .eq('room_id', roomId)
+    .order('created_at');
+  
+  if (error) throw error;
+  
+  return (data || []).map(m => ({
+    ...m,
+    nickname: m.users?.nickname,
+    profile_image: m.users?.profile_image
+  }));
+}
+
+async function updateMessage(id, content) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ content, is_edited: true, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return getMessage(id);
+}
+
+async function deleteMessage(id) {
+  const message = await getMessage(id);
+  if (!message) return null;
+  
+  const { error } = await supabase
+    .from('messages')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
   return message;
 }
 
 // ===== 계정 관련 =====
-function createAccount(username, email, passwordHash, nickname) {
-  const id = uuidv4();
-  run('INSERT INTO accounts (id, username, email, password_hash, nickname, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))', 
-    [id, username, email, passwordHash, nickname]);
-  return getAccount(id);
-}
-
-function getAccount(id) {
-  return getOne('SELECT * FROM accounts WHERE id = ?', [id]);
-}
-
-function getAccountByUsername(username) {
-  return getOne('SELECT * FROM accounts WHERE username = ?', [username]);
-}
-
-function getAccountByEmail(email) {
-  return getOne('SELECT * FROM accounts WHERE email = ?', [email]);
-}
-
-function updateAccount(id, { nickname, profileImage, telegramChatId }) {
-  const updates = [];
-  const values = [];
+async function createAccount(username, email, passwordHash, nickname) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .insert({ username, email, password_hash: passwordHash, nickname })
+    .select()
+    .single();
   
-  if (nickname !== undefined) {
-    updates.push('nickname = ?');
-    values.push(nickname);
-  }
-  if (profileImage !== undefined) {
-    updates.push('profile_image = ?');
-    values.push(profileImage);
-  }
-  if (telegramChatId !== undefined) {
-    updates.push('telegram_chat_id = ?');
-    values.push(telegramChatId);
-  }
+  if (error) throw error;
+  return data;
+}
+
+async function getAccount(id) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('id', id)
+    .single();
   
-  if (updates.length > 0) {
-    values.push(id);
-    run(`UPDATE accounts SET ${updates.join(', ')} WHERE id = ?`, values);
-  }
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function getAccountByUsername(username) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('username', username)
+    .single();
   
-  return getAccount(id);
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
 }
 
-function setResetToken(email, token, expires) {
-  run('UPDATE accounts SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
+async function getAccountByEmail(email) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('email', email)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
 }
 
-function getAccountByResetToken(token) {
-  return getOne('SELECT * FROM accounts WHERE reset_token = ? AND reset_token_expires > datetime("now")', [token]);
+async function updateAccount(id, { nickname, profileImage, telegramChatId }) {
+  const updates = {};
+  if (nickname !== undefined) updates.nickname = nickname;
+  if (profileImage !== undefined) updates.profile_image = profileImage;
+  if (telegramChatId !== undefined) updates.telegram_chat_id = telegramChatId;
+  
+  if (Object.keys(updates).length === 0) return getAccount(id);
+  
+  const { data, error } = await supabase
+    .from('accounts')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
 }
 
-function updatePassword(id, passwordHash) {
-  run('UPDATE accounts SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, id]);
+async function setResetToken(email, token, expires) {
+  const { error } = await supabase
+    .from('accounts')
+    .update({ reset_token: token, reset_token_expires: expires })
+    .eq('email', email);
+  
+  if (error) throw error;
+}
+
+async function getAccountByResetToken(token) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('reset_token', token)
+    .gt('reset_token_expires', new Date().toISOString())
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+async function updatePassword(id, passwordHash) {
+  const { error } = await supabase
+    .from('accounts')
+    .update({ 
+      password_hash: passwordHash, 
+      reset_token: null, 
+      reset_token_expires: null 
+    })
+    .eq('id', id);
+  
+  if (error) throw error;
 }
 
 // ===== 계정-세션 연결 =====
-function addAccountToSession(accountId, sessionId) {
-  const existing = getOne('SELECT * FROM account_sessions WHERE account_id = ? AND session_id = ?', [accountId, sessionId]);
-  if (!existing) {
-    const id = uuidv4();
-    run('INSERT INTO account_sessions (id, account_id, session_id, joined_at) VALUES (?, ?, ?, datetime("now"))', [id, accountId, sessionId]);
-  }
+async function addAccountToSession(accountId, sessionId) {
+  const { error } = await supabase
+    .from('account_sessions')
+    .upsert({ account_id: accountId, session_id: sessionId })
+    .select();
+  
+  if (error && error.code !== '23505') throw error; // 중복 무시
 }
 
-function getSessionsByAccount(accountId) {
-  return getAll(`
-    SELECT s.*, 
-      (SELECT name FROM rooms WHERE session_id = s.id ORDER BY created_at LIMIT 1) as first_room_name,
-      (SELECT COUNT(*) FROM rooms WHERE session_id = s.id) as room_count,
-      acs.joined_at
-    FROM sessions s
-    JOIN account_sessions acs ON s.id = acs.session_id
-    WHERE acs.account_id = ?
-    ORDER BY acs.joined_at DESC
-  `, [accountId]);
+async function getSessionsByAccount(accountId) {
+  const { data, error } = await supabase
+    .from('account_sessions')
+    .select(`
+      *,
+      sessions (*)
+    `)
+    .eq('account_id', accountId)
+    .order('joined_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  // 각 세션의 첫 번째 방 이름과 방 개수 가져오기
+  const results = [];
+  for (const as of (data || [])) {
+    const { data: rooms } = await supabase
+      .from('rooms')
+      .select('name')
+      .eq('session_id', as.session_id)
+      .order('created_at')
+      .limit(1);
+    
+    const { count } = await supabase
+      .from('rooms')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', as.session_id);
+    
+    results.push({
+      ...as.sessions,
+      first_room_name: rooms?.[0]?.name || '채팅',
+      room_count: count || 0,
+      joined_at: as.joined_at
+    });
+  }
+  
+  return results;
 }
 
 // ===== 백업용 =====
-function exportRoom(roomId) {
-  const room = getRoom(roomId);
+async function exportRoom(roomId) {
+  const room = await getRoom(roomId);
   if (!room) return null;
   
-  const messages = getMessagesByRoom(roomId);
+  const messages = await getMessagesByRoom(roomId);
   const userIds = [...new Set(messages.map(m => m.user_id))];
-  const users = userIds.map(id => getUser(id));
+  
+  const users = [];
+  for (const id of userIds) {
+    const user = await getUser(id);
+    if (user) users.push(user);
+  }
   
   return {
     roomName: room.name,
@@ -369,7 +411,7 @@ function exportRoom(roomId) {
       senderProfileImage: m.profile_image,
       text: m.content,
       time: m.created_at,
-      isEdited: m.is_edited === 1
+      isEdited: m.is_edited === true
     }))
   };
 }

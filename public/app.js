@@ -227,7 +227,7 @@ async function joinSession(sessionId) {
           state.userId = existingUser.id;
           state.user = existingUser;
           state.currentRoomId = session.rooms[0]?.id;
-          initChat();
+          await initChat();
           return;
         }
       } catch (e) {
@@ -282,7 +282,7 @@ async function saveProfile() {
       state.user.profile_image = state.account.profile_image;
     }
     
-    initChat();
+    await initChat();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -319,8 +319,20 @@ function updateSidebarProfile() {
 }
 
 // ===== 채팅 초기화 =====
-function initChat() {
+async function initChat() {
   showScreen('chat-screen');
+  
+  // 세션 정보 로드 (rooms가 없을 수 있으므로)
+  if (!state.rooms || state.rooms.length === 0) {
+    try {
+      const session = await api('GET', `/sessions/${state.sessionId}`);
+      state.rooms = session.rooms;
+      state.currentRoomId = session.rooms[0]?.id;
+    } catch (e) {
+      console.error('세션 로드 실패:', e);
+    }
+  }
+  
   updateSidebarProfile();
   renderRooms();
   

@@ -11,7 +11,8 @@ const { Resend } = require('resend');
 const db = require('./database');
 const telegram = require('./telegram');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend는 선택 사항 (비밀번호 찾기용)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const app = express();
 const server = http.createServer(app);
@@ -65,10 +66,10 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     // 중복 체크
-    if (db.getAccountByUsername(username)) {
+    if (await db.getAccountByUsername(username)) {
       return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
     }
-    if (db.getAccountByEmail(email)) {
+    if (await db.getAccountByEmail(email)) {
       return res.status(400).json({ error: '이미 사용 중인 이메일입니다.' });
     }
     
@@ -76,7 +77,7 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     
     // 계정 생성
-    const account = db.createAccount(username, email, passwordHash, nickname || username);
+    const account = await db.createAccount(username, email, passwordHash, nickname || username);
     
     res.json({ 
       id: account.id, 
@@ -98,7 +99,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
     }
     
-    const account = db.getAccountByUsername(username);
+    const account = await db.getAccountByUsername(username);
     if (!account) {
       return res.status(401).json({ error: '아이디 또는 비밀번호가 틀립니다.' });
     }
@@ -130,7 +131,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       return res.status(400).json({ error: '이메일을 입력하세요.' });
     }
     
-    const account = db.getAccountByEmail(email);
+    const account = await db.getAccountByEmail(email);
     if (!account) {
       // 보안상 계정 존재 여부를 알려주지 않음
       return res.json({ message: '이메일이 발송되었습니다.' });
@@ -139,9 +140,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // 토큰 생성
     const token = uuidv4();
     const expires = new Date(Date.now() + 3600000).toISOString(); // 1시간
-    db.setResetToken(email, token, expires);
+    await db.setResetToken(email, token, expires);
     
     // 이메일 발송
+    if (!resend) {
+      return res.status(500).json({ error: '이메일 발송 기능이 설정되지 않았습니다.' });
+    }
+    
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password.html?token=${token}`;
     
     await resend.emails.send({
@@ -173,13 +178,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
       return res.status(400).json({ error: '토큰과 새 비밀번호를 입력하세요.' });
     }
     
-    const account = db.getAccountByResetToken(token);
+    const account = await db.getAccountByResetToken(token);
     if (!account) {
       return res.status(400).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
     }
     
     const passwordHash = await bcrypt.hash(password, 10);
-    db.updatePassword(account.id, passwordHash);
+    await db.updatePassword(account.id, passwordHash);
     
     res.json({ message: '비밀번호가 변경되었습니다.' });
   } catch (error) {
@@ -188,10 +193,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // 계정 정보 수정
-app.patch('/api/accounts/:id', (req, res) => {
+app.patch('/api/accounts/:id', async (req, res) => {
   try {
     const { nickname, telegramChatId } = req.body;
-    const account = db.updateAccount(req.params.id, { nickname, telegramChatId });
+    const account = await db.updateAccount(req.params.id, { nickname, telegramChatId });
     res.json(account);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -199,13 +204,13 @@ app.patch('/api/accounts/:id', (req, res) => {
 });
 
 // 계정 프로필 이미지 업로드
-app.post('/api/accounts/:id/profile-image', upload.single('image'), (req, res) => {
+app.post('/api/accounts/:id/profile-image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: '이미지가 없습니다.' });
     }
     const profileImage = `/uploads/${req.file.filename}`;
-    const account = db.updateAccount(req.params.id, { profileImage });
+    const account = await db.updateAccount(req.params.id, { profileImage });
     res.json(account);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -213,9 +218,9 @@ app.post('/api/accounts/:id/profile-image', upload.single('image'), (req, res) =
 });
 
 // 내 채팅방 목록
-app.get('/api/accounts/:id/sessions', (req, res) => {
+app.get('/api/accounts/:id/sessions', async (req, res) => {
   try {
-    const sessions = db.getSessionsByAccount(req.params.id);
+    const sessions = await db.getSessionsByAccount(req.params.id);
     res.json(sessions);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -225,9 +230,9 @@ app.get('/api/accounts/:id/sessions', (req, res) => {
 // ===== REST API =====
 
 // 새 세션 생성
-app.post('/api/sessions', (req, res) => {
+app.post('/api/sessions', async (req, res) => {
   try {
-    const session = db.createSession();
+    const session = await db.createSession();
     res.json(session);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -235,14 +240,14 @@ app.post('/api/sessions', (req, res) => {
 });
 
 // 세션 정보 조회
-app.get('/api/sessions/:id', (req, res) => {
+app.get('/api/sessions/:id', async (req, res) => {
   try {
-    const session = db.getSession(req.params.id);
+    const session = await db.getSession(req.params.id);
     if (!session) {
       return res.status(404).json({ error: '세션을 찾을 수 없습니다.' });
     }
-    const rooms = db.getRoomsBySession(req.params.id);
-    const users = db.getUsersBySession(req.params.id);
+    const rooms = await db.getRoomsBySession(req.params.id);
+    const users = await db.getUsersBySession(req.params.id);
     res.json({ ...session, rooms, users });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -250,14 +255,14 @@ app.get('/api/sessions/:id', (req, res) => {
 });
 
 // 사용자 생성
-app.post('/api/sessions/:sessionId/users', (req, res) => {
+app.post('/api/sessions/:sessionId/users', async (req, res) => {
   try {
     const { nickname, accountId } = req.body;
-    const user = db.createUser(req.params.sessionId, nickname || '익명');
+    const user = await db.createUser(req.params.sessionId, nickname || '익명', accountId);
     
     // 계정이 있으면 세션과 연결
     if (accountId) {
-      db.addAccountToSession(accountId, req.params.sessionId);
+      await db.addAccountToSession(accountId, req.params.sessionId);
     }
     
     res.json(user);
@@ -267,10 +272,10 @@ app.post('/api/sessions/:sessionId/users', (req, res) => {
 });
 
 // 사용자 정보 수정
-app.patch('/api/users/:id', (req, res) => {
+app.patch('/api/users/:id', async (req, res) => {
   try {
     const { nickname, telegramChatId } = req.body;
-    const user = db.updateUser(req.params.id, { nickname, telegramChatId });
+    const user = await db.updateUser(req.params.id, { nickname, telegramChatId });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -278,13 +283,13 @@ app.patch('/api/users/:id', (req, res) => {
 });
 
 // 프로필 이미지 업로드
-app.post('/api/users/:id/profile-image', upload.single('image'), (req, res) => {
+app.post('/api/users/:id/profile-image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: '이미지가 없습니다.' });
     }
     const profileImage = `/uploads/${req.file.filename}`;
-    const user = db.updateUser(req.params.id, { profileImage });
+    const user = await db.updateUser(req.params.id, { profileImage });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -292,10 +297,10 @@ app.post('/api/users/:id/profile-image', upload.single('image'), (req, res) => {
 });
 
 // 채팅방 생성
-app.post('/api/sessions/:sessionId/rooms', (req, res) => {
+app.post('/api/sessions/:sessionId/rooms', async (req, res) => {
   try {
     const { name } = req.body;
-    const room = db.createRoom(req.params.sessionId, name || '새 채팅방');
+    const room = await db.createRoom(req.params.sessionId, name || '새 채팅방');
     io.to(req.params.sessionId).emit('room:created', room);
     res.json(room);
   } catch (error) {
@@ -304,13 +309,13 @@ app.post('/api/sessions/:sessionId/rooms', (req, res) => {
 });
 
 // 채팅방 수정 (이름 변경, 보관)
-app.patch('/api/rooms/:id', (req, res) => {
+app.patch('/api/rooms/:id', async (req, res) => {
   try {
     const { name, isArchived } = req.body;
-    const room = db.updateRoom(req.params.id, { name, isArchived });
+    const room = await db.updateRoom(req.params.id, { name, isArchived });
     
     // 방 정보 변경 알림
-    const fullRoom = db.getRoom(req.params.id);
+    const fullRoom = await db.getRoom(req.params.id);
     if (fullRoom) {
       io.to(fullRoom.session_id).emit('room:updated', room);
     }
@@ -322,9 +327,9 @@ app.patch('/api/rooms/:id', (req, res) => {
 });
 
 // 채팅방 메시지 조회
-app.get('/api/rooms/:id/messages', (req, res) => {
+app.get('/api/rooms/:id/messages', async (req, res) => {
   try {
-    const messages = db.getMessagesByRoom(req.params.id);
+    const messages = await db.getMessagesByRoom(req.params.id);
     res.json(messages);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -332,9 +337,9 @@ app.get('/api/rooms/:id/messages', (req, res) => {
 });
 
 // 채팅방 백업 (JSON 다운로드)
-app.get('/api/rooms/:id/export', (req, res) => {
+app.get('/api/rooms/:id/export', async (req, res) => {
   try {
-    const data = db.exportRoom(req.params.id);
+    const data = await db.exportRoom(req.params.id);
     if (!data) {
       return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
     }
@@ -347,13 +352,13 @@ app.get('/api/rooms/:id/export', (req, res) => {
 });
 
 // 메시지 수정
-app.patch('/api/messages/:id', (req, res) => {
+app.patch('/api/messages/:id', async (req, res) => {
   try {
     const { content } = req.body;
-    const message = db.updateMessage(req.params.id, content);
+    const message = await db.updateMessage(req.params.id, content);
     
     // 메시지가 속한 방 찾기
-    const room = db.getRoom(message.room_id);
+    const room = await db.getRoom(message.room_id);
     if (room) {
       io.to(room.session_id).emit('message:updated', message);
     }
@@ -365,15 +370,15 @@ app.patch('/api/messages/:id', (req, res) => {
 });
 
 // 메시지 삭제
-app.delete('/api/messages/:id', (req, res) => {
+app.delete('/api/messages/:id', async (req, res) => {
   try {
-    const message = db.deleteMessage(req.params.id);
+    const message = await db.deleteMessage(req.params.id);
     if (!message) {
       return res.status(404).json({ error: '메시지를 찾을 수 없습니다.' });
     }
     
     // 메시지가 속한 방 찾기
-    const room = db.getRoom(message.room_id);
+    const room = await db.getRoom(message.room_id);
     if (room) {
       io.to(room.session_id).emit('message:deleted', { id: req.params.id, roomId: message.room_id });
     }
@@ -428,16 +433,16 @@ io.on('connection', (socket) => {
   // 메시지 전송
   socket.on('message:send', async ({ roomId, userId, content }) => {
     try {
-      const message = db.createMessage(roomId, userId, content);
-      const room = db.getRoom(roomId);
-      const sender = db.getUser(userId);
+      const message = await db.createMessage(roomId, userId, content);
+      const room = await db.getRoom(roomId);
+      const sender = await db.getUser(userId);
       
       if (room) {
         // 같은 세션의 모든 사용자에게 메시지 전송
         io.to(room.session_id).emit('message:new', message);
         
         // 텔레그램 알림 (본인 제외)
-        const users = db.getUsersBySession(room.session_id);
+        const users = await db.getUsersBySession(room.session_id);
         for (const user of users) {
           if (user.id !== userId && user.telegram_chat_id) {
             await telegram.notifyNewMessage(
