@@ -41,11 +41,12 @@ async function sendTelegramMessage(chatId, message) {
 }
 
 // 새 메시지 알림 보내기
-async function notifyNewMessage(chatId, senderNickname, roomName, messageContent) {
+async function notifyNewMessage(chatId, senderNickname, roomName, messageContent, chatUrl) {
   const message = `💬 <b>새 메시지</b>\n\n` +
     `👤 <b>${senderNickname}</b>\n` +
     `📁 ${roomName}\n\n` +
-    `${messageContent}`;
+    `${messageContent}\n\n` +
+    `🔗 <a href="${chatUrl}">채팅방으로 이동</a>`;
   
   return sendTelegramMessage(chatId, message);
 }

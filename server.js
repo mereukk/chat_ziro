@@ -457,13 +457,15 @@ io.on('connection', (socket) => {
         
         // 텔레그램 알림 (본인 제외)
         const users = await db.getUsersBySession(room.session_id);
+        const chatUrl = `https://chat-mereu.onrender.com/chat/${room.session_id}`;
         for (const user of users) {
           if (user.id !== userId && user.telegram_chat_id) {
             await telegram.notifyNewMessage(
               user.telegram_chat_id,
               sender.nickname,
               room.name,
-              content
+              content,
+              chatUrl
             );
           }
         }
