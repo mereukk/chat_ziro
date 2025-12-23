@@ -82,6 +82,7 @@ const elements = {
   btnAddRoom: document.getElementById('btn-add-room'),
   onlineCount: document.getElementById('online-count'),
   btnShareLink: document.getElementById('btn-share-link'),
+  btnLogoutChat: document.getElementById('btn-logout-chat'),
   
   // 채팅 메인
   currentRoomName: document.getElementById('current-room-name'),
@@ -859,6 +860,14 @@ function initEventListeners() {
   elements.btnCreateRoom.addEventListener('click', createRoom);
   
   elements.btnShareLink.addEventListener('click', shareLink);
+  
+  // 채팅 화면 로그아웃
+  elements.btnLogoutChat.addEventListener('click', () => {
+    if (confirm('로그아웃하시겠습니까?')) {
+      clearAccount();
+      window.location.href = '/';
+    }
+  });
   
   // 보관된 섹션 접기/펼치기
   elements.archivedHeader.addEventListener('click', () => {
