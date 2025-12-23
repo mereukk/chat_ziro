@@ -112,7 +112,18 @@ body {
 .tagline {
   color: var(--text-secondary);
   font-size: 1.1rem;
-  margin-bottom: 40px;
+  margin-bottom: 20px;
+}
+
+.notice-box {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 30px;
+  line-height: 1.6;
 }
 
 .welcome-actions {
