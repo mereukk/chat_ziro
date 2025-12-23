@@ -60,6 +60,33 @@ async function initDatabase() {
     )
   `);
   
+  // 계정 테이블
+  db.run(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nickname TEXT DEFAULT '익명',
+      profile_image TEXT DEFAULT NULL,
+      telegram_chat_id TEXT DEFAULT NULL,
+      reset_token TEXT DEFAULT NULL,
+      reset_token_expires DATETIME DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  
+  // 계정-세션 연결 테이블 (어떤 계정이 어떤 세션에 참여했는지)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS account_sessions (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(account_id, session_id)
+    )
+  `);
+  
   saveDatabase();
   console.log('📦 데이터베이스 초기화 완료');
   return db;
@@ -240,6 +267,85 @@ function deleteMessage(id) {
   return message;
 }
 
+// ===== 계정 관련 =====
+function createAccount(username, email, passwordHash, nickname) {
+  const id = uuidv4();
+  run('INSERT INTO accounts (id, username, email, password_hash, nickname, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))', 
+    [id, username, email, passwordHash, nickname]);
+  return getAccount(id);
+}
+
+function getAccount(id) {
+  return getOne('SELECT * FROM accounts WHERE id = ?', [id]);
+}
+
+function getAccountByUsername(username) {
+  return getOne('SELECT * FROM accounts WHERE username = ?', [username]);
+}
+
+function getAccountByEmail(email) {
+  return getOne('SELECT * FROM accounts WHERE email = ?', [email]);
+}
+
+function updateAccount(id, { nickname, profileImage, telegramChatId }) {
+  const updates = [];
+  const values = [];
+  
+  if (nickname !== undefined) {
+    updates.push('nickname = ?');
+    values.push(nickname);
+  }
+  if (profileImage !== undefined) {
+    updates.push('profile_image = ?');
+    values.push(profileImage);
+  }
+  if (telegramChatId !== undefined) {
+    updates.push('telegram_chat_id = ?');
+    values.push(telegramChatId);
+  }
+  
+  if (updates.length > 0) {
+    values.push(id);
+    run(`UPDATE accounts SET ${updates.join(', ')} WHERE id = ?`, values);
+  }
+  
+  return getAccount(id);
+}
+
+function setResetToken(email, token, expires) {
+  run('UPDATE accounts SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
+}
+
+function getAccountByResetToken(token) {
+  return getOne('SELECT * FROM accounts WHERE reset_token = ? AND reset_token_expires > datetime("now")', [token]);
+}
+
+function updatePassword(id, passwordHash) {
+  run('UPDATE accounts SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, id]);
+}
+
+// ===== 계정-세션 연결 =====
+function addAccountToSession(accountId, sessionId) {
+  const existing = getOne('SELECT * FROM account_sessions WHERE account_id = ? AND session_id = ?', [accountId, sessionId]);
+  if (!existing) {
+    const id = uuidv4();
+    run('INSERT INTO account_sessions (id, account_id, session_id, joined_at) VALUES (?, ?, ?, datetime("now"))', [id, accountId, sessionId]);
+  }
+}
+
+function getSessionsByAccount(accountId) {
+  return getAll(`
+    SELECT s.*, 
+      (SELECT name FROM rooms WHERE session_id = s.id ORDER BY created_at LIMIT 1) as first_room_name,
+      (SELECT COUNT(*) FROM rooms WHERE session_id = s.id) as room_count,
+      acs.joined_at
+    FROM sessions s
+    JOIN account_sessions acs ON s.id = acs.session_id
+    WHERE acs.account_id = ?
+    ORDER BY acs.joined_at DESC
+  `, [accountId]);
+}
+
 // ===== 백업용 =====
 function exportRoom(roomId) {
   const room = getRoom(roomId);
@@ -285,5 +391,16 @@ module.exports = {
   getMessagesByRoom,
   updateMessage,
   deleteMessage,
-  exportRoom
+  exportRoom,
+  // 계정 관련
+  createAccount,
+  getAccount,
+  getAccountByUsername,
+  getAccountByEmail,
+  updateAccount,
+  setResetToken,
+  getAccountByResetToken,
+  updatePassword,
+  addAccountToSession,
+  getSessionsByAccount
 };

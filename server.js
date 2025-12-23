@@ -6,8 +6,12 @@ const { Server } = require('socket.io');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const { Resend } = require('resend');
 const db = require('./database');
 const telegram = require('./telegram');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +53,175 @@ if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
 
+// ===== 계정 API =====
+
+// 회원가입
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password, nickname } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: '아이디, 이메일, 비밀번호를 모두 입력하세요.' });
+    }
+    
+    // 중복 체크
+    if (db.getAccountByUsername(username)) {
+      return res.status(400).json({ error: '이미 사용 중인 아이디입니다.' });
+    }
+    if (db.getAccountByEmail(email)) {
+      return res.status(400).json({ error: '이미 사용 중인 이메일입니다.' });
+    }
+    
+    // 비밀번호 해싱
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // 계정 생성
+    const account = db.createAccount(username, email, passwordHash, nickname || username);
+    
+    res.json({ 
+      id: account.id, 
+      username: account.username, 
+      nickname: account.nickname,
+      email: account.email
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 로그인
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+    }
+    
+    const account = db.getAccountByUsername(username);
+    if (!account) {
+      return res.status(401).json({ error: '아이디 또는 비밀번호가 틀립니다.' });
+    }
+    
+    const isMatch = await bcrypt.compare(password, account.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: '아이디 또는 비밀번호가 틀립니다.' });
+    }
+    
+    res.json({ 
+      id: account.id, 
+      username: account.username, 
+      nickname: account.nickname,
+      email: account.email,
+      profile_image: account.profile_image,
+      telegram_chat_id: account.telegram_chat_id
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 비밀번호 찾기 (이메일 발송)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: '이메일을 입력하세요.' });
+    }
+    
+    const account = db.getAccountByEmail(email);
+    if (!account) {
+      // 보안상 계정 존재 여부를 알려주지 않음
+      return res.json({ message: '이메일이 발송되었습니다.' });
+    }
+    
+    // 토큰 생성
+    const token = uuidv4();
+    const expires = new Date(Date.now() + 3600000).toISOString(); // 1시간
+    db.setResetToken(email, token, expires);
+    
+    // 이메일 발송
+    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password.html?token=${token}`;
+    
+    await resend.emails.send({
+      from: 'Chat Ziro <onboarding@resend.dev>',
+      to: email,
+      subject: '[Chat Ziro] 비밀번호 재설정',
+      html: `
+        <h2>비밀번호 재설정</h2>
+        <p>아래 링크를 클릭하여 비밀번호를 재설정하세요.</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p>이 링크는 1시간 후 만료됩니다.</p>
+        <p>본인이 요청하지 않았다면 이 이메일을 무시하세요.</p>
+      `
+    });
+    
+    res.json({ message: '이메일이 발송되었습니다.' });
+  } catch (error) {
+    console.error('이메일 발송 에러:', error);
+    res.status(500).json({ error: '이메일 발송에 실패했습니다.' });
+  }
+});
+
+// 비밀번호 재설정
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({ error: '토큰과 새 비밀번호를 입력하세요.' });
+    }
+    
+    const account = db.getAccountByResetToken(token);
+    if (!account) {
+      return res.status(400).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
+    }
+    
+    const passwordHash = await bcrypt.hash(password, 10);
+    db.updatePassword(account.id, passwordHash);
+    
+    res.json({ message: '비밀번호가 변경되었습니다.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 계정 정보 수정
+app.patch('/api/accounts/:id', (req, res) => {
+  try {
+    const { nickname, telegramChatId } = req.body;
+    const account = db.updateAccount(req.params.id, { nickname, telegramChatId });
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 계정 프로필 이미지 업로드
+app.post('/api/accounts/:id/profile-image', upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '이미지가 없습니다.' });
+    }
+    const profileImage = `/uploads/${req.file.filename}`;
+    const account = db.updateAccount(req.params.id, { profileImage });
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 내 채팅방 목록
+app.get('/api/accounts/:id/sessions', (req, res) => {
+  try {
+    const sessions = db.getSessionsByAccount(req.params.id);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== REST API =====
 
 // 새 세션 생성
@@ -79,8 +252,14 @@ app.get('/api/sessions/:id', (req, res) => {
 // 사용자 생성
 app.post('/api/sessions/:sessionId/users', (req, res) => {
   try {
-    const { nickname } = req.body;
+    const { nickname, accountId } = req.body;
     const user = db.createUser(req.params.sessionId, nickname || '익명');
+    
+    // 계정이 있으면 세션과 연결
+    if (accountId) {
+      db.addAccountToSession(accountId, req.params.sessionId);
+    }
+    
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });

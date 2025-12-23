@@ -20,20 +20,114 @@
         </div>
         <p class="tagline">간편하게 채팅하고, 알림 받으세요</p>
         
+        <!-- 로그인 상태 표시 -->
+        <div id="account-status" class="account-status hidden">
+          <span>👤 <span id="logged-in-name"></span></span>
+          <button id="btn-logout" class="btn btn-secondary btn-small">로그아웃</button>
+        </div>
+        
         <div class="welcome-actions">
           <button id="btn-create-session" class="btn btn-primary">
             <span class="btn-icon">✨</span>
             새 채팅 시작하기
           </button>
           
+          <button id="btn-my-chats" class="btn btn-secondary hidden">
+            <span class="btn-icon">📋</span>
+            내 채팅방 목록
+          </button>
+          
           <div class="divider">
-            <span>또는</span>
+            <span>계정</span>
+          </div>
+          
+          <!-- 비로그인 상태 -->
+          <div id="auth-buttons" class="auth-buttons">
+            <button id="btn-show-login" class="btn btn-secondary">로그인</button>
+            <button id="btn-show-register" class="btn btn-secondary">회원가입</button>
           </div>
           
           <div class="join-section">
             <p>링크를 받으셨나요? URL에서 자동으로 참가됩니다.</p>
           </div>
         </div>
+      </div>
+    </div>
+    
+    <!-- 로그인 화면 -->
+    <div id="login-screen" class="screen">
+      <div class="auth-container">
+        <button class="btn-back" id="btn-back-login">← 뒤로</button>
+        <h2>로그인</h2>
+        <form id="login-form" class="auth-form">
+          <div class="input-group">
+            <label for="login-username">아이디</label>
+            <input type="text" id="login-username" placeholder="아이디" required>
+          </div>
+          <div class="input-group">
+            <label for="login-password">비밀번호</label>
+            <input type="password" id="login-password" placeholder="비밀번호" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">로그인</button>
+          <p class="auth-link">
+            <a href="#" id="btn-forgot-password">비밀번호를 잊으셨나요?</a>
+          </p>
+        </form>
+      </div>
+    </div>
+    
+    <!-- 회원가입 화면 -->
+    <div id="register-screen" class="screen">
+      <div class="auth-container">
+        <button class="btn-back" id="btn-back-register">← 뒤로</button>
+        <h2>회원가입</h2>
+        <form id="register-form" class="auth-form">
+          <div class="input-group">
+            <label for="register-username">아이디</label>
+            <input type="text" id="register-username" placeholder="아이디" required minlength="3">
+          </div>
+          <div class="input-group">
+            <label for="register-email">이메일</label>
+            <input type="email" id="register-email" placeholder="이메일 (비밀번호 찾기용)" required>
+          </div>
+          <div class="input-group">
+            <label for="register-password">비밀번호</label>
+            <input type="password" id="register-password" placeholder="비밀번호" required minlength="4">
+          </div>
+          <div class="input-group">
+            <label for="register-nickname">닉네임</label>
+            <input type="text" id="register-nickname" placeholder="채팅에서 사용할 닉네임">
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">가입하기</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- 비밀번호 찾기 화면 -->
+    <div id="forgot-screen" class="screen">
+      <div class="auth-container">
+        <button class="btn-back" id="btn-back-forgot">← 뒤로</button>
+        <h2>비밀번호 찾기</h2>
+        <p class="subtitle">가입할 때 사용한 이메일을 입력하세요.</p>
+        <form id="forgot-form" class="auth-form">
+          <div class="input-group">
+            <label for="forgot-email">이메일</label>
+            <input type="email" id="forgot-email" placeholder="이메일" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">재설정 링크 받기</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- 내 채팅방 목록 화면 -->
+    <div id="my-chats-screen" class="screen">
+      <div class="my-chats-container">
+        <button class="btn-back" id="btn-back-my-chats">← 뒤로</button>
+        <h2>📋 내 채팅방 목록</h2>
+        <div id="my-chats-list" class="my-chats-list">
+          <!-- 채팅방 목록 -->
+        </div>
+        <p id="no-chats-message" class="no-chats hidden">참여한 채팅방이 없습니다.</p>
       </div>
     </div>
 

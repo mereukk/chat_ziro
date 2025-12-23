@@ -6,7 +6,8 @@ const state = {
   rooms: [],
   currentRoomId: null,
   messages: [],
-  onlineUsers: []
+  onlineUsers: [],
+  account: null // 로그인한 계정
 };
 
 // Socket.io 연결
@@ -22,6 +23,42 @@ const elements = {
   
   // 시작 화면
   btnCreateSession: document.getElementById('btn-create-session'),
+  btnMyChats: document.getElementById('btn-my-chats'),
+  accountStatus: document.getElementById('account-status'),
+  loggedInName: document.getElementById('logged-in-name'),
+  btnLogout: document.getElementById('btn-logout'),
+  authButtons: document.getElementById('auth-buttons'),
+  btnShowLogin: document.getElementById('btn-show-login'),
+  btnShowRegister: document.getElementById('btn-show-register'),
+  
+  // 로그인 화면
+  loginScreen: document.getElementById('login-screen'),
+  loginForm: document.getElementById('login-form'),
+  loginUsername: document.getElementById('login-username'),
+  loginPassword: document.getElementById('login-password'),
+  btnBackLogin: document.getElementById('btn-back-login'),
+  btnForgotPassword: document.getElementById('btn-forgot-password'),
+  
+  // 회원가입 화면
+  registerScreen: document.getElementById('register-screen'),
+  registerForm: document.getElementById('register-form'),
+  registerUsername: document.getElementById('register-username'),
+  registerEmail: document.getElementById('register-email'),
+  registerPassword: document.getElementById('register-password'),
+  registerNickname: document.getElementById('register-nickname'),
+  btnBackRegister: document.getElementById('btn-back-register'),
+  
+  // 비밀번호 찾기 화면
+  forgotScreen: document.getElementById('forgot-screen'),
+  forgotForm: document.getElementById('forgot-form'),
+  forgotEmail: document.getElementById('forgot-email'),
+  btnBackForgot: document.getElementById('btn-back-forgot'),
+  
+  // 내 채팅방 목록 화면
+  myChatsScreen: document.getElementById('my-chats-screen'),
+  myChatsList: document.getElementById('my-chats-list'),
+  noChatsMessage: document.getElementById('no-chats-message'),
+  btnBackMyChats: document.getElementById('btn-back-my-chats'),
   
   // 프로필 설정
   profilePreview: document.getElementById('profile-preview'),
@@ -209,12 +246,21 @@ async function joinSession(sessionId) {
 
 // ===== 프로필 관리 =====
 async function saveProfile() {
-  const nickname = elements.nicknameInput.value.trim() || '익명';
-  const telegramChatId = elements.telegramInput.value.trim();
+  // 로그인한 계정이 있으면 그 정보 사용
+  let nickname = elements.nicknameInput.value.trim() || '익명';
+  let telegramChatId = elements.telegramInput.value.trim();
+  
+  if (state.account) {
+    nickname = state.account.nickname || nickname;
+    telegramChatId = state.account.telegram_chat_id || telegramChatId;
+  }
   
   try {
-    // 사용자 생성
-    const user = await api('POST', `/sessions/${state.sessionId}/users`, { nickname });
+    // 사용자 생성 (계정 ID 포함)
+    const user = await api('POST', `/sessions/${state.sessionId}/users`, { 
+      nickname,
+      accountId: state.account?.id
+    });
     state.userId = user.id;
     state.user = user;
     
@@ -227,11 +273,13 @@ async function saveProfile() {
       state.user.telegram_chat_id = telegramChatId;
     }
     
-    // 프로필 이미지 업로드
+    // 프로필 이미지 업로드 (계정에 이미지가 없으면)
     const file = elements.profileImageInput.files[0];
     if (file) {
       const updated = await uploadProfileImage(user.id, file);
       state.user = updated;
+    } else if (state.account?.profile_image) {
+      state.user.profile_image = state.account.profile_image;
     }
     
     initChat();
@@ -693,6 +741,28 @@ function initEventListeners() {
   // 시작 화면
   elements.btnCreateSession.addEventListener('click', createSession);
   
+  // 계정 관련
+  elements.btnShowLogin.addEventListener('click', () => showScreen('login-screen'));
+  elements.btnShowRegister.addEventListener('click', () => showScreen('register-screen'));
+  elements.btnBackLogin.addEventListener('click', () => showScreen('welcome-screen'));
+  elements.btnBackRegister.addEventListener('click', () => showScreen('welcome-screen'));
+  elements.btnBackForgot.addEventListener('click', () => showScreen('login-screen'));
+  elements.btnBackMyChats.addEventListener('click', () => showScreen('welcome-screen'));
+  elements.btnForgotPassword.addEventListener('click', (e) => {
+    e.preventDefault();
+    showScreen('forgot-screen');
+  });
+  elements.btnLogout.addEventListener('click', () => {
+    clearAccount();
+    showToast('로그아웃되었습니다.', 'success');
+  });
+  elements.btnMyChats.addEventListener('click', loadMyChats);
+  
+  // 폼 제출
+  elements.loginForm.addEventListener('submit', handleLogin);
+  elements.registerForm.addEventListener('submit', handleRegister);
+  elements.forgotForm.addEventListener('submit', handleForgotPassword);
+  
   // 프로필 설정
   elements.profileImageWrapper.addEventListener('click', () => {
     elements.profileImageInput.click();
@@ -818,8 +888,169 @@ function initEventListeners() {
 }
 
 // ===== 초기화 =====
+// ===== 계정 관리 =====
+function loadAccount() {
+  const saved = localStorage.getItem('account');
+  if (saved) {
+    state.account = JSON.parse(saved);
+    updateAccountUI();
+  }
+}
+
+function saveAccount(account) {
+  state.account = account;
+  localStorage.setItem('account', JSON.stringify(account));
+  updateAccountUI();
+}
+
+function clearAccount() {
+  state.account = null;
+  localStorage.removeItem('account');
+  updateAccountUI();
+}
+
+function updateAccountUI() {
+  if (state.account) {
+    elements.accountStatus.classList.remove('hidden');
+    elements.loggedInName.textContent = state.account.nickname || state.account.username;
+    elements.authButtons.classList.add('hidden');
+    elements.btnMyChats.classList.remove('hidden');
+  } else {
+    elements.accountStatus.classList.add('hidden');
+    elements.authButtons.classList.remove('hidden');
+    elements.btnMyChats.classList.add('hidden');
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  
+  const username = elements.loginUsername.value.trim();
+  const password = elements.loginPassword.value;
+  
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error);
+    }
+    
+    saveAccount(data);
+    showScreen('welcome-screen');
+    showToast('로그인되었습니다!', 'success');
+    elements.loginForm.reset();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  
+  const username = elements.registerUsername.value.trim();
+  const email = elements.registerEmail.value.trim();
+  const password = elements.registerPassword.value;
+  const nickname = elements.registerNickname.value.trim() || username;
+  
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password, nickname })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error);
+    }
+    
+    saveAccount(data);
+    showScreen('welcome-screen');
+    showToast('회원가입 완료! 환영합니다!', 'success');
+    elements.registerForm.reset();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  
+  const email = elements.forgotEmail.value.trim();
+  
+  try {
+    const response = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error);
+    }
+    
+    showToast('이메일이 발송되었습니다. 메일함을 확인하세요!', 'success');
+    showScreen('welcome-screen');
+    elements.forgotForm.reset();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function loadMyChats() {
+  if (!state.account) return;
+  
+  try {
+    const sessions = await api('GET', `/accounts/${state.account.id}/sessions`);
+    
+    if (sessions.length === 0) {
+      elements.myChatsList.innerHTML = '';
+      elements.noChatsMessage.classList.remove('hidden');
+    } else {
+      elements.noChatsMessage.classList.add('hidden');
+      elements.myChatsList.innerHTML = sessions.map(s => `
+        <div class="my-chat-item" data-session-id="${s.id}">
+          <span class="chat-icon">💬</span>
+          <div class="chat-info">
+            <div class="chat-name">${s.first_room_name || '채팅'}</div>
+            <div class="chat-meta">채팅방 ${s.room_count}개 · ${formatDate(s.joined_at)}</div>
+          </div>
+        </div>
+      `).join('');
+      
+      // 클릭 이벤트
+      elements.myChatsList.querySelectorAll('.my-chat-item').forEach(item => {
+        item.addEventListener('click', () => {
+          window.location.href = `/chat/${item.dataset.sessionId}`;
+        });
+      });
+    }
+    
+    showScreen('my-chats-screen');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
+
 function init() {
   initEventListeners();
+  
+  // 계정 로드
+  loadAccount();
   
   // 기본 프로필 이미지 설정
   elements.profilePreview.src = getDefaultAvatar('?');
