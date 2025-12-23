@@ -141,6 +141,25 @@ body {
   font-size: 0.9rem;
 }
 
+/* 하단 저작권 */
+.welcome-footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.welcome-footer a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.welcome-footer a:hover {
+  text-decoration: underline;
+}
+
 /* 계정 상태 */
 .account-status {
   display: flex;
