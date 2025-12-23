@@ -237,29 +237,22 @@ async function joinSession(sessionId) {
       }
     }
     
-    // 새 사용자
+    // 새 사용자 - 프로필 설정 화면으로 이동
     state.currentRoomId = session.rooms[0]?.id;
     
-    // 로그인한 계정이 있으면 바로 입장 (프로필 설정 건너뛰기)
+    // URL 변경
+    history.pushState({}, '', `/chat/${state.sessionId}`);
+    
+    // 로그인한 계정이 있으면 기본값 채우기
     if (state.account) {
-      const user = await api('POST', `/sessions/${state.sessionId}/users`, { 
-        nickname: state.account.nickname || state.account.username,
-        accountId: state.account.id
-      });
-      state.userId = user.id;
-      state.user = user;
-      state.user.profile_image = state.account.profile_image;
-      state.user.telegram_chat_id = state.account.telegram_chat_id;
-      
-      localStorage.setItem(`user_${state.sessionId}`, user.id);
-      
-      // URL 변경
-      history.pushState({}, '', `/chat/${state.sessionId}`);
-      
-      await initChat();
-    } else {
-      showScreen('profile-screen');
+      elements.nicknameInput.value = state.account.nickname || state.account.username || '';
+      elements.telegramInput.value = state.account.telegram_chat_id || '';
+      if (state.account.profile_image) {
+        elements.profilePreview.src = state.account.profile_image;
+      }
     }
+    
+    showScreen('profile-screen');
   } catch (error) {
     showToast('세션을 찾을 수 없습니다.', 'error');
     showScreen('welcome-screen');
@@ -268,14 +261,9 @@ async function joinSession(sessionId) {
 
 // ===== 프로필 관리 =====
 async function saveProfile() {
-  // 로그인한 계정이 있으면 그 정보 사용
-  let nickname = elements.nicknameInput.value.trim() || '익명';
-  let telegramChatId = elements.telegramInput.value.trim();
-  
-  if (state.account) {
-    nickname = state.account.nickname || nickname;
-    telegramChatId = state.account.telegram_chat_id || telegramChatId;
-  }
+  // 입력된 값 사용 (채팅방마다 다른 닉네임/이미지 가능)
+  const nickname = elements.nicknameInput.value.trim() || '익명';
+  const telegramChatId = elements.telegramInput.value.trim();
   
   try {
     // 사용자 생성 (계정 ID 포함)
@@ -295,13 +283,14 @@ async function saveProfile() {
       state.user.telegram_chat_id = telegramChatId;
     }
     
-    // 프로필 이미지 업로드 (계정에 이미지가 없으면)
+    // 프로필 이미지 업로드
     const file = elements.profileImageInput.files[0];
     if (file) {
       const updated = await uploadProfileImage(user.id, file);
       state.user = updated;
-    } else if (state.account?.profile_image) {
-      state.user.profile_image = state.account.profile_image;
+    } else if (elements.profilePreview.src && !elements.profilePreview.src.includes('ui-avatars.com')) {
+      // 기존 이미지가 있으면 사용 (계정 이미지 등)
+      state.user.profile_image = elements.profilePreview.src;
     }
     
     await initChat();
