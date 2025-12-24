@@ -88,6 +88,19 @@ async function getUsersBySession(sessionId) {
   return data || [];
 }
 
+// 같은 세션에서 같은 계정으로 만든 user 찾기
+async function getUserByAccountAndSession(accountId, sessionId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('session_id', sessionId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
 async function updateUser(id, { nickname, profileImage, telegramChatId }) {
   const updates = {};
   if (nickname !== undefined) updates.nickname = nickname;
@@ -425,6 +438,7 @@ module.exports = {
   createUser,
   getUser,
   getUsersBySession,
+  getUserByAccountAndSession,
   updateUser,
   createRoom,
   getRoomsBySession,

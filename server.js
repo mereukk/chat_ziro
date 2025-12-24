@@ -267,10 +267,19 @@ app.get('/api/sessions/:id', async (req, res) => {
   }
 });
 
-// 사용자 생성
+// 사용자 생성 (또는 기존 사용자 반환)
 app.post('/api/sessions/:sessionId/users', async (req, res) => {
   try {
     const { nickname, accountId } = req.body;
+    
+    // 같은 계정으로 같은 세션에 이미 있으면 기존 user 반환
+    if (accountId) {
+      const existingUser = await db.getUserByAccountAndSession(accountId, req.params.sessionId);
+      if (existingUser) {
+        return res.json(existingUser);
+      }
+    }
+    
     const user = await db.createUser(req.params.sessionId, nickname || '익명', accountId);
     
     // 계정이 있으면 세션과 연결
