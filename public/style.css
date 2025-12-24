@@ -618,27 +618,10 @@ body {
   white-space: nowrap;
 }
 
-.room-item .btn-delete-room {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 4px;
-  opacity: 0;
-  transition: opacity var(--transition), transform var(--transition);
-}
-
-.room-item:hover .btn-delete-room {
-  opacity: 0.5;
-}
-
-.room-item .btn-delete-room:hover {
-  opacity: 1;
-  transform: scale(1.1);
-}
-
-.room-item.active .btn-delete-room:hover {
-  opacity: 1;
+/* 헤더 삭제 버튼 스타일 */
+.btn.btn-icon {
+  padding: 6px 10px;
+  min-width: auto;
 }
 
 /* 채팅방 삭제 모달 */

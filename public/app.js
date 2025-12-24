@@ -93,6 +93,7 @@ const elements = {
   btnEditRoom: document.getElementById('btn-edit-room'),
   btnExportRoom: document.getElementById('btn-export-room'),
   btnArchiveRoom: document.getElementById('btn-archive-room'),
+  btnDeleteRoom: document.getElementById('btn-delete-room'),
   messagesContainer: document.getElementById('messages-container'),
   messagesList: document.getElementById('messages-list'),
   typingIndicator: document.getElementById('typing-indicator'),
@@ -501,7 +502,6 @@ function renderRooms() {
         data-room-id="${room.id}">
       <span class="room-icon">💬</span>
       <span class="room-name">${room.name}</span>
-      <button class="btn-delete-room" data-room-id="${room.id}" data-room-name="${room.name}" title="채팅방 삭제">🗑️</button>
     </li>
   `).join('');
   
@@ -514,7 +514,6 @@ function renderRooms() {
           data-room-id="${room.id}">
         <span class="room-icon">📁</span>
         <span class="room-name">${room.name}</span>
-        <button class="btn-delete-room" data-room-id="${room.id}" data-room-name="${room.name}" title="채팅방 삭제">🗑️</button>
       </li>
     `).join('');
   } else {
@@ -523,25 +522,15 @@ function renderRooms() {
   
   // 클릭 이벤트 - 일반 방
   elements.roomsList.querySelectorAll('.room-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      if (e.target.classList.contains('btn-delete-room')) return;
+    item.addEventListener('click', () => {
       selectRoom(item.dataset.roomId);
     });
   });
   
   // 클릭 이벤트 - 보관된 방
   elements.archivedRoomsList.querySelectorAll('.room-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      if (e.target.classList.contains('btn-delete-room')) return;
+    item.addEventListener('click', () => {
       selectRoom(item.dataset.roomId);
-    });
-  });
-  
-  // 삭제 버튼 클릭 이벤트
-  document.querySelectorAll('.btn-delete-room').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showDeleteRoomModal(btn.dataset.roomId, btn.dataset.roomName);
     });
   });
 }
@@ -982,7 +971,15 @@ function initEventListeners() {
   elements.btnExportRoom.addEventListener('click', exportRoom);
   elements.btnArchiveRoom.addEventListener('click', toggleArchiveRoom);
   
-  // 채팅방 삭제 확인
+  // 채팅방 삭제 버튼 (헤더)
+  elements.btnDeleteRoom.addEventListener('click', () => {
+    const room = state.rooms.find(r => r.id === state.currentRoomId);
+    if (room) {
+      showDeleteRoomModal(room.id, room.name);
+    }
+  });
+  
+  // 채팅방 삭제 확인 (모달)
   document.getElementById('btn-confirm-delete-room').addEventListener('click', deleteRoom);
   
   // 메시지 입력
