@@ -47,6 +47,7 @@ const elements = {
   registerEmail: document.getElementById('register-email'),
   registerPassword: document.getElementById('register-password'),
   registerNickname: document.getElementById('register-nickname'),
+  registerTelegram: document.getElementById('register-telegram'),
   btnBackRegister: document.getElementById('btn-back-register'),
   
   // 비밀번호 찾기 화면
@@ -1054,12 +1055,13 @@ async function handleRegister(e) {
   const email = elements.registerEmail.value.trim();
   const password = elements.registerPassword.value;
   const nickname = elements.registerNickname.value.trim() || username;
+  const telegramChatId = elements.registerTelegram?.value.trim() || '';
   
   try {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password, nickname })
+      body: JSON.stringify({ username, email, password, nickname, telegramChatId })
     });
     
     const data = await response.json();

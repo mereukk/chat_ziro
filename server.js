@@ -71,7 +71,7 @@ async function uploadToSupabase(file) {
 // 회원가입
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, nickname } = req.body;
+    const { username, email, password, nickname, telegramChatId } = req.body;
     
     if (!username || !email || !password) {
       return res.status(400).json({ error: '아이디, 이메일, 비밀번호를 모두 입력하세요.' });
@@ -89,7 +89,7 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     
     // 계정 생성
-    const account = await db.createAccount(username, email, passwordHash, nickname || username);
+    const account = await db.createAccount(username, email, passwordHash, nickname || username, telegramChatId);
     
     res.json({ 
       id: account.id, 
@@ -280,7 +280,16 @@ app.post('/api/sessions/:sessionId/users', async (req, res) => {
       }
     }
     
-    const user = await db.createUser(req.params.sessionId, nickname || '익명', accountId);
+    // 계정이 있으면 텔레그램 ID 가져오기
+    let telegramChatId = null;
+    if (accountId) {
+      const account = await db.getAccount(accountId);
+      if (account?.telegram_chat_id) {
+        telegramChatId = account.telegram_chat_id;
+      }
+    }
+    
+    const user = await db.createUser(req.params.sessionId, nickname || '익명', accountId, telegramChatId);
     
     // 계정이 있으면 세션과 연결
     if (accountId) {

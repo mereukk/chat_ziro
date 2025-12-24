@@ -52,14 +52,19 @@ async function getSession(id) {
 }
 
 // ===== 사용자 관련 =====
-async function createUser(sessionId, nickname = '익명', accountId = null) {
+async function createUser(sessionId, nickname = '익명', accountId = null, telegramChatId = null) {
+  const insertData = { 
+    session_id: sessionId, 
+    nickname,
+    account_id: accountId
+  };
+  if (telegramChatId) {
+    insertData.telegram_chat_id = telegramChatId;
+  }
+  
   const { data, error } = await supabase
     .from('users')
-    .insert({ 
-      session_id: sessionId, 
-      nickname,
-      account_id: accountId
-    })
+    .insert(insertData)
     .select()
     .single();
   
@@ -257,10 +262,15 @@ async function deleteMessage(id) {
 }
 
 // ===== 계정 관련 =====
-async function createAccount(username, email, passwordHash, nickname) {
+async function createAccount(username, email, passwordHash, nickname, telegramChatId) {
+  const insertData = { username, email, password_hash: passwordHash, nickname };
+  if (telegramChatId) {
+    insertData.telegram_chat_id = telegramChatId;
+  }
+  
   const { data, error } = await supabase
     .from('accounts')
-    .insert({ username, email, password_hash: passwordHash, nickname })
+    .insert(insertData)
     .select()
     .single();
   
