@@ -233,6 +233,13 @@ async function createSession() {
 
 async function joinSession(sessionId) {
   try {
+    // URL에서 room 파라미터 먼저 저장 (나중에 사용)
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomIdFromUrl = urlParams.get('room');
+    if (roomIdFromUrl) {
+      state.pendingRoomId = roomIdFromUrl;
+    }
+    
     const session = await api('GET', `/sessions/${sessionId}`);
     state.sessionId = sessionId;
     state.rooms = session.rooms;
@@ -456,9 +463,14 @@ async function initChat() {
     }
   });
   
-  // URL에서 room 파라미터 확인 (알림에서 온 경우)
+  // URL 또는 저장된 room 파라미터 확인 (알림에서 온 경우)
   const urlParams = new URLSearchParams(window.location.search);
-  const roomIdFromUrl = urlParams.get('room');
+  const roomIdFromUrl = urlParams.get('room') || state.pendingRoomId;
+  
+  // 사용 후 초기화
+  if (state.pendingRoomId) {
+    delete state.pendingRoomId;
+  }
   
   // 첫 번째 방 선택 (또는 URL에서 지정된 방)
   if (state.rooms.length > 0) {
