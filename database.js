@@ -88,17 +88,21 @@ async function getUsersBySession(sessionId) {
   return data || [];
 }
 
-// 같은 세션에서 같은 계정으로 만든 user 찾기
+// 같은 세션에서 같은 계정으로 만든 user 찾기 (텔레그램 ID가 있는 것 우선)
 async function getUserByAccountAndSession(accountId, sessionId) {
   const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('account_id', accountId)
     .eq('session_id', sessionId)
-    .single();
+    .order('created_at', { ascending: true }); // 가장 처음 만든 user
   
-  if (error && error.code !== 'PGRST116') throw error;
-  return data;
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  
+  // 텔레그램 ID가 있는 user 우선 반환
+  const userWithTelegram = data.find(u => u.telegram_chat_id);
+  return userWithTelegram || data[0];
 }
 
 async function updateUser(id, { nickname, profileImage, telegramChatId }) {
