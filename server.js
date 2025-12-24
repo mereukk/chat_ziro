@@ -259,7 +259,8 @@ app.get('/api/sessions/:id', async (req, res) => {
     if (!session) {
       return res.status(404).json({ error: '세션을 찾을 수 없습니다.' });
     }
-    const rooms = await db.getRoomsBySession(req.params.id);
+    // 마지막 메시지 시간 기준 정렬 (최신 대화가 먼저)
+    const rooms = await db.getRoomsBySessionSorted(req.params.id);
     const users = await db.getUsersBySession(req.params.id);
     res.json({ ...session, rooms, users });
   } catch (error) {
@@ -353,6 +354,26 @@ app.patch('/api/rooms/:id', async (req, res) => {
     }
     
     res.json(room);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 채팅방 삭제
+app.delete('/api/rooms/:id', async (req, res) => {
+  try {
+    const room = await db.getRoom(req.params.id);
+    if (!room) {
+      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    }
+    
+    const sessionId = room.session_id;
+    const deletedRoom = await db.deleteRoom(req.params.id);
+    
+    // 방 삭제 알림
+    io.to(sessionId).emit('room:deleted', { roomId: req.params.id });
+    
+    res.json({ success: true, room: deletedRoom });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

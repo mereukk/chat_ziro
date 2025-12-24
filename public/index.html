@@ -362,6 +362,29 @@
       </div>
     </div>
 
+    <!-- 모달: 채팅방 삭제 확인 -->
+    <div id="room-delete-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-small">
+        <div class="modal-header">
+          <h3>⚠️ 채팅방 삭제</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-warning">
+            <strong id="delete-room-name"></strong> 채팅방을 삭제하시겠습니까?
+          </p>
+          <p class="delete-caution">
+            ⚠️ 모든 메시지가 영구적으로 삭제되며 복구할 수 없습니다.
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" data-close-modal>취소</button>
+            <button id="btn-confirm-delete-room" class="btn btn-danger">삭제</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 모달: 프로필 수정 -->
     <div id="profile-edit-modal" class="modal hidden">
       <div class="modal-backdrop"></div>

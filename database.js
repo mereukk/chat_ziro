@@ -181,6 +181,60 @@ async function updateRoom(id, { name, isArchived }) {
   return data;
 }
 
+async function deleteRoom(id) {
+  const room = await getRoom(id);
+  if (!room) return null;
+  
+  // 먼저 해당 채팅방의 모든 메시지 삭제
+  const { error: msgError } = await supabase
+    .from('messages')
+    .delete()
+    .eq('room_id', id);
+  
+  if (msgError) throw msgError;
+  
+  // 채팅방 삭제
+  const { error } = await supabase
+    .from('rooms')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+  return room;
+}
+
+// 채팅방 목록을 마지막 메시지 시간 기준으로 정렬해서 가져오기
+async function getRoomsBySessionSorted(sessionId) {
+  // 모든 채팅방 가져오기
+  const { data: rooms, error } = await supabase
+    .from('rooms')
+    .select('*')
+    .eq('session_id', sessionId);
+  
+  if (error) throw error;
+  if (!rooms || rooms.length === 0) return [];
+  
+  // 각 채팅방의 마지막 메시지 시간 가져오기
+  const roomsWithLastMessage = await Promise.all(rooms.map(async (room) => {
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('room_id', room.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    return {
+      ...room,
+      last_message_at: messages?.[0]?.created_at || room.created_at
+    };
+  }));
+  
+  // 마지막 메시지 시간 기준 내림차순 정렬 (최신이 첫 번째)
+  return roomsWithLastMessage.sort((a, b) => 
+    new Date(b.last_message_at) - new Date(a.last_message_at)
+  );
+}
+
 // ===== 메시지 관련 =====
 async function createMessage(roomId, userId, content) {
   const { data, error } = await supabase
@@ -456,8 +510,10 @@ module.exports = {
   updateUser,
   createRoom,
   getRoomsBySession,
+  getRoomsBySessionSorted,
   getRoom,
   updateRoom,
+  deleteRoom,
   createMessage,
   getMessage,
   getMessagesByRoom,

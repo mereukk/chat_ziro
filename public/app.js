@@ -450,6 +450,16 @@ async function initChat() {
     }
   });
   
+  socket.on('room:deleted', ({ roomId }) => {
+    state.rooms = state.rooms.filter(r => r.id !== roomId);
+    renderRooms();
+    
+    // 현재 보고 있던 방이 삭제된 경우 다른 방으로 이동
+    if (roomId === state.currentRoomId && state.rooms.length > 0) {
+      selectRoom(state.rooms[0].id);
+    }
+  });
+  
   socket.on('typing:show', ({ roomId, userId, nickname }) => {
     if (roomId === state.currentRoomId && userId !== state.userId) {
       elements.typingIndicator.classList.remove('hidden');
@@ -491,6 +501,7 @@ function renderRooms() {
         data-room-id="${room.id}">
       <span class="room-icon">💬</span>
       <span class="room-name">${room.name}</span>
+      <button class="btn-delete-room" data-room-id="${room.id}" data-room-name="${room.name}" title="채팅방 삭제">🗑️</button>
     </li>
   `).join('');
   
@@ -503,6 +514,7 @@ function renderRooms() {
           data-room-id="${room.id}">
         <span class="room-icon">📁</span>
         <span class="room-name">${room.name}</span>
+        <button class="btn-delete-room" data-room-id="${room.id}" data-room-name="${room.name}" title="채팅방 삭제">🗑️</button>
       </li>
     `).join('');
   } else {
@@ -511,15 +523,25 @@ function renderRooms() {
   
   // 클릭 이벤트 - 일반 방
   elements.roomsList.querySelectorAll('.room-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('btn-delete-room')) return;
       selectRoom(item.dataset.roomId);
     });
   });
   
   // 클릭 이벤트 - 보관된 방
   elements.archivedRoomsList.querySelectorAll('.room-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('btn-delete-room')) return;
       selectRoom(item.dataset.roomId);
+    });
+  });
+  
+  // 삭제 버튼 클릭 이벤트
+  document.querySelectorAll('.btn-delete-room').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showDeleteRoomModal(btn.dataset.roomId, btn.dataset.roomName);
     });
   });
 }
@@ -638,6 +660,28 @@ async function exportRoom() {
     showToast('백업 파일이 다운로드되었습니다.', 'success');
   } catch (error) {
     showToast(error.message, 'error');
+  }
+}
+
+// 채팅방 삭제 관련
+let deletingRoomId = null;
+
+function showDeleteRoomModal(roomId, roomName) {
+  deletingRoomId = roomId;
+  document.getElementById('delete-room-name').textContent = `"${roomName}"`;
+  showModal('room-delete-modal');
+}
+
+async function deleteRoom() {
+  if (!deletingRoomId) return;
+  
+  try {
+    await api('DELETE', `/rooms/${deletingRoomId}`);
+    hideModal('room-delete-modal');
+    showToast('채팅방이 삭제되었습니다.', 'success');
+    deletingRoomId = null;
+  } catch (error) {
+    showToast('채팅방 삭제에 실패했습니다.', 'error');
   }
 }
 
@@ -937,6 +981,9 @@ function initEventListeners() {
   elements.btnSaveRoomName.addEventListener('click', updateRoomName);
   elements.btnExportRoom.addEventListener('click', exportRoom);
   elements.btnArchiveRoom.addEventListener('click', toggleArchiveRoom);
+  
+  // 채팅방 삭제 확인
+  document.getElementById('btn-confirm-delete-room').addEventListener('click', deleteRoom);
   
   // 메시지 입력
   elements.messageInput.addEventListener('input', () => {
