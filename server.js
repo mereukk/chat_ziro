@@ -370,10 +370,19 @@ app.delete('/api/rooms/:id', async (req, res) => {
     const sessionId = room.session_id;
     const deletedRoom = await db.deleteRoom(req.params.id);
     
-    // 방 삭제 알림
-    io.to(sessionId).emit('room:deleted', { roomId: req.params.id });
+    // 남은 채팅방 확인
+    const remainingRooms = await db.getRoomsBySession(sessionId);
     
-    res.json({ success: true, room: deletedRoom });
+    if (remainingRooms.length === 0) {
+      // 채팅방이 0개면 세션도 삭제
+      await db.deleteSession(sessionId);
+      io.to(sessionId).emit('session:deleted', { sessionId });
+      res.json({ success: true, room: deletedRoom, sessionDeleted: true });
+    } else {
+      // 방 삭제 알림
+      io.to(sessionId).emit('room:deleted', { roomId: req.params.id });
+      res.json({ success: true, room: deletedRoom, sessionDeleted: false });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

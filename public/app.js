@@ -461,6 +461,17 @@ async function initChat() {
     }
   });
   
+  socket.on('session:deleted', () => {
+    // 세션이 삭제되면 환영 화면으로 이동
+    showToast('모든 채팅방이 삭제되어 세션이 종료되었습니다.', 'info');
+    state.sessionId = null;
+    state.rooms = [];
+    state.messages = [];
+    localStorage.removeItem(`user_${state.sessionId}`);
+    history.pushState({}, '', '/');
+    showScreen('welcome-screen');
+  });
+  
   socket.on('typing:show', ({ roomId, userId, nickname }) => {
     if (roomId === state.currentRoomId && userId !== state.userId) {
       elements.typingIndicator.classList.remove('hidden');
@@ -665,10 +676,21 @@ async function deleteRoom() {
   if (!deletingRoomId) return;
   
   try {
-    await api('DELETE', `/rooms/${deletingRoomId}`);
+    const result = await api('DELETE', `/rooms/${deletingRoomId}`);
     hideModal('room-delete-modal');
-    showToast('채팅방이 삭제되었습니다.', 'success');
     deletingRoomId = null;
+    
+    if (result.sessionDeleted) {
+      // 세션이 삭제된 경우 환영 화면으로 이동
+      showToast('모든 채팅방이 삭제되어 세션이 종료되었습니다.', 'info');
+      state.sessionId = null;
+      state.rooms = [];
+      state.messages = [];
+      history.pushState({}, '', '/');
+      showScreen('welcome-screen');
+    } else {
+      showToast('채팅방이 삭제되었습니다.', 'success');
+    }
   } catch (error) {
     showToast('채팅방 삭제에 실패했습니다.', 'error');
   }

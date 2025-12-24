@@ -51,6 +51,30 @@ async function getSession(id) {
   return data;
 }
 
+async function deleteSession(id) {
+  // 관련 데이터 삭제 (순서 중요: 외래키 제약)
+  // 1. 메시지 삭제 (rooms를 통해)
+  const rooms = await getRoomsBySession(id);
+  for (const room of rooms) {
+    await supabase.from('messages').delete().eq('room_id', room.id);
+  }
+  
+  // 2. 채팅방 삭제
+  await supabase.from('rooms').delete().eq('session_id', id);
+  
+  // 3. 사용자 삭제
+  await supabase.from('users').delete().eq('session_id', id);
+  
+  // 4. 계정-세션 연결 삭제
+  await supabase.from('account_sessions').delete().eq('session_id', id);
+  
+  // 5. 세션 삭제
+  const { error } = await supabase.from('sessions').delete().eq('id', id);
+  if (error) throw error;
+  
+  return true;
+}
+
 // ===== 사용자 관련 =====
 async function createUser(sessionId, nickname = '익명', accountId = null, telegramChatId = null) {
   const insertData = { 
@@ -503,6 +527,7 @@ module.exports = {
   initDatabase,
   createSession,
   getSession,
+  deleteSession,
   createUser,
   getUser,
   getUsersBySession,
