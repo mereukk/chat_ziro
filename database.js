@@ -176,7 +176,7 @@ async function getMessage(id) {
     .from('messages')
     .select(`
       *,
-      users (nickname, profile_image)
+      users (nickname, profile_image, account_id)
     `)
     .eq('id', id)
     .single();
@@ -187,7 +187,8 @@ async function getMessage(id) {
     return {
       ...data,
       nickname: data.users?.nickname,
-      profile_image: data.users?.profile_image
+      profile_image: data.users?.profile_image,
+      account_id: data.users?.account_id
     };
   }
   return data;
@@ -198,7 +199,7 @@ async function getMessagesByRoom(roomId) {
     .from('messages')
     .select(`
       *,
-      users (nickname, profile_image)
+      users (nickname, profile_image, account_id)
     `)
     .eq('room_id', roomId)
     .order('created_at');
@@ -208,7 +209,8 @@ async function getMessagesByRoom(roomId) {
   return (data || []).map(m => ({
     ...m,
     nickname: m.users?.nickname,
-    profile_image: m.users?.profile_image
+    profile_image: m.users?.profile_image,
+    account_id: m.users?.account_id
   }));
 }
 

@@ -457,7 +457,7 @@ io.on('connection', (socket) => {
         
         // 텔레그램 알림 (본인 제외, 중복 Chat ID 제거)
         const users = await db.getUsersBySession(room.session_id);
-        const chatUrl = `https://chat-mereu.onrender.com/chat/${room.session_id}`;
+        const chatUrl = `https://chat-mereu.onrender.com/chat/${room.session_id}?room=${roomId}`;
         const notifiedChatIds = new Set(); // 중복 알림 방지
         const senderChatId = sender.telegram_chat_id; // 발신자 Chat ID
         

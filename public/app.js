@@ -435,9 +435,14 @@ async function initChat() {
     }
   });
   
-  // 첫 번째 방 선택
+  // URL에서 room 파라미터 확인 (알림에서 온 경우)
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomIdFromUrl = urlParams.get('room');
+  
+  // 첫 번째 방 선택 (또는 URL에서 지정된 방)
   if (state.rooms.length > 0) {
-    selectRoom(state.currentRoomId || state.rooms[0].id);
+    const targetRoomId = roomIdFromUrl || state.currentRoomId || state.rooms[0].id;
+    selectRoom(targetRoomId);
   }
 }
 
@@ -617,7 +622,9 @@ function renderMessages() {
 }
 
 function createMessageHTML(msg) {
-  const isMine = msg.user_id === state.userId;
+  // 같은 유저 또는 같은 계정이면 수정 가능
+  const isMine = msg.user_id === state.userId || 
+    (state.account && msg.account_id && msg.account_id === state.account.id);
   const avatarSrc = getAvatarSrc(msg.profile_image, msg.nickname);
   
   return `
