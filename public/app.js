@@ -236,7 +236,27 @@ async function joinSession(sessionId) {
     state.sessionId = sessionId;
     state.rooms = session.rooms;
     
-    // 저장된 사용자 ID 확인
+    // 로그인한 계정이 있으면 서버에서 기존 user 확인
+    if (state.account) {
+      try {
+        // 서버에 요청하면 같은 계정+세션의 기존 user를 반환함
+        const user = await api('POST', `/sessions/${sessionId}/users`, {
+          nickname: state.account.nickname || state.account.username,
+          accountId: state.account.id
+        });
+        state.userId = user.id;
+        state.user = user;
+        state.currentRoomId = session.rooms[0]?.id;
+        localStorage.setItem(`user_${sessionId}`, user.id);
+        history.pushState({}, '', `/chat/${state.sessionId}`);
+        await initChat();
+        return;
+      } catch (e) {
+        console.error('Error getting/creating user:', e);
+      }
+    }
+    
+    // 저장된 사용자 ID 확인 (비로그인 상태)
     const savedUserId = localStorage.getItem(`user_${sessionId}`);
     if (savedUserId) {
       // 기존 사용자
